@@ -32,6 +32,48 @@ def minimize_binary_loss(qp: QuadraticProgram):
     
     return result
 
+from qiskit_optimization.problems import QuadraticProgram
+from qiskit_optimization.algorithms import WarmStartQAOAOptimizer, SlsqpOptimizer
+from qiskit_algorithms import QAOA
+from qiskit_algorithms.optimizers import COBYLA
+from qiskit.primitives import StatevectorSampler
+
+def minimize_binary_loss_warm_start(qp: QuadraticProgram):
+    """
+    Minimizes a loss function defined over a binary vector x using Warm-Start QAOA.
+    
+    Args:
+        qp (QuadraticProgram): The objective function and constraints.
+        
+    Returns:
+        OptimizationResult: Contains the optimal binary vector x and the minimum cost.
+    """
+    # 1. Define a classical continuous optimizer as the pre-solver
+    # This solves the relaxed (continuous) version of the QUBO
+    pre_solver = SlsqpOptimizer()
+    
+    # 2. Define the quantum execution primitive and the classical outer-loop optimizer
+    sampler = StatevectorSampler()
+    optimizer = COBYLA(maxiter=100)
+    
+    # 3. Instantiate the standard QAOA solver
+    qaoa_mes = QAOA(sampler=sampler, optimizer=optimizer, reps=2)
+    
+    # 4. Wrap QAOA in the WarmStartQAOAOptimizer
+    # relax_for_pre_solver=True automatically converts binary variables to continuous 
+    # epsilon bounds the relaxed solutions away from exactly 0 or 1 to allow quantum exploration
+    ws_qaoa = WarmStartQAOAOptimizer(
+        pre_solver=pre_solver,
+        relax_for_pre_solver=True,
+        qaoa=qaoa_mes,
+        epsilon=0.25 
+    )
+    
+    # 5. Solve the binary optimization problem
+    result = ws_qaoa.solve(qp)
+    
+    return result
+
 # --- Example Usage ---
 if __name__ == "__main__":
     # Define a simple binary optimization problem
@@ -48,8 +90,8 @@ if __name__ == "__main__":
         quadratic={("x_0", "x_1"): -2, ("x_1", "x_2"): 1}
     )
     
-    # Run the function
-    optimal_solution = minimize_binary_loss(problem)
+    # Run the warm-started QAOA function
+    optimal_solution = minimize_binary_loss_warm_start(problem)
     
     print(f"Optimal binary vector x: {optimal_solution.x}")
     print(f"Minimum loss value: {optimal_solution.fval}")
