@@ -1,8 +1,10 @@
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
 from qiskit_optimization.problems import QuadraticProgram
-from qiskit_algorithms.optimizers import COBYLA
+from qiskit_optimization.algorithms import WarmStartQAOAOptimizer, SlsqpOptimizer
 from qiskit_algorithms import QAOA
+from qiskit_algorithms.optimizers import COBYLA
 from qiskit.primitives import StatevectorSampler
+
 
 def minimize_binary_loss(qp: QuadraticProgram):
     """
@@ -32,11 +34,6 @@ def minimize_binary_loss(qp: QuadraticProgram):
     
     return result
 
-from qiskit_optimization.problems import QuadraticProgram
-from qiskit_optimization.algorithms import WarmStartQAOAOptimizer, SlsqpOptimizer
-from qiskit_algorithms import QAOA
-from qiskit_algorithms.optimizers import COBYLA
-from qiskit.primitives import StatevectorSampler
 
 def minimize_binary_loss_warm_start(qp: QuadraticProgram):
     """
