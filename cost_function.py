@@ -25,24 +25,24 @@ def get_profit_coefficients_vectorized(df, gp, w, wij, alpha, beta, kappa, fric,
     c0 = 1.0 - S0
 
     s_i = S0_deriv * w
-    s_ij = np.zeros((6, 6))
+    s_ij = np.zeros((4, 4))
     for (i, j), w_val in wij.items():
         s_ij[i, j] = S0_deriv * w_val
 
     # Ransomware Probability Coefficients (Scalars)
-    alpha_ij = np.zeros((6, 6))
-    beta_ij = np.zeros((6, 6))
+    alpha_ij = np.zeros((4, 4))
+    beta_ij = np.zeros((4, 4))
     for (i, j), (a_val, b_val) in interactions.items():
         alpha_ij[i, j] = a_val
         beta_ij[i, j] = b_val
 
-    L = np.zeros(6)
-    for i in range(6):
+    L = np.zeros(4)
+    for i in range(4):
         L[i] = -(1 - S0) * alpha[i] - S0_deriv * w[i] * (1 - alpha[i])
 
-    Q = np.zeros((6, 6))
-    for i in range(6):
-        for j in range(i + 1, 6):
+    Q = np.zeros((4, 4))
+    for i in range(4):
+        for j in range(i + 1, 4):
             Q[i, j] = -S0_deriv * wij.get((i, j), 0) - (1 - S0) * alpha_ij[i, j] \
                       + alpha[i] * S0_deriv * w[j] + alpha[j] * S0_deriv * w[i]
 
@@ -55,22 +55,22 @@ def get_profit_coefficients_vectorized(df, gp, w, wij, alpha, beta, kappa, fric,
     Rev_daily = Rev / 365.0
     I0_raw = gp["c1"] * A_hat + Rev_daily * (gp["d0"] + gp["d1"] * A_hat * (1 - S0)) + gp["gamma"] * Rev
 
-    I_raw = np.zeros((M, 6))
-    for i in range(6):
+    I_raw = np.zeros((M, 4))
+    for i in range(4):
         I_raw[:, i] = -Rev_daily * gp["d1"] * A_hat * s_i[i]
 
-    I_ij_raw = np.zeros((M, 6, 6))
-    for i in range(6):
-        for j in range(i + 1, 6):
+    I_ij_raw = np.zeros((M, 4, 4))
+    for i in range(4):
+        for j in range(i + 1, 4):
             I_ij_raw[:, i, j] = -Rev_daily * gp["d1"] * A_hat * s_ij[i, j]
 
-    I_linear = np.zeros((M, 6))
-    for i in range(6):
+    I_linear = np.zeros((M, 4))
+    for i in range(4):
         I_linear[:, i] = I_raw[:, i] - I0_raw * beta[i] + I_raw[:, i] * beta[i]
 
-    I_quad = np.zeros((M, 6, 6))
-    for i in range(6):
-        for j in range(i + 1, 6):
+    I_quad = np.zeros((M, 4, 4))
+    for i in range(4):
+        for j in range(i + 1, 4):
             I_quad[:, i, j] = I_ij_raw[:, i, j] - I0_raw * beta_ij[i, j] + I_raw[:, i] * beta[j] + I_raw[:, j] * beta[i]
 
     # Expected Payout
@@ -79,13 +79,13 @@ def get_profit_coefficients_vectorized(df, gp, w, wij, alpha, beta, kappa, fric,
     I0_tilde = I0_raw - d
 
     E0 = P0 * I0_tilde
-    E_linear = np.zeros((M, 6))
-    for i in range(6):
+    E_linear = np.zeros((M, 4))
+    for i in range(4):
         E_linear[:, i] = P0 * I_linear[:, i] + I0_tilde * P_i[:, i] + P_i[:, i] * I_linear[:, i]
 
-    E_quad = np.zeros((M, 6, 6))
-    for i in range(6):
-        for j in range(i + 1, 6):
+    E_quad = np.zeros((M, 4, 4))
+    for i in range(4):
+        for j in range(i + 1, 4):
             E_quad[:, i, j] = P0 * I_quad[:, i, j] + I0_tilde * P_ij[:, i, j] + P_i[:, i] * I_linear[:, j] + P_i[:, j] * I_linear[:, i]
 
     # Acceptance Function Linearization
@@ -102,17 +102,17 @@ def get_profit_coefficients_vectorized(df, gp, w, wij, alpha, beta, kappa, fric,
     C_p = alpha0 - alpha_p * E0
     C_pp = np.full(M, alpha_p) # Broadcasting scalar to length M for consistency
 
-    C_i = np.zeros((M, 6))
-    for i in range(6):
+    C_i = np.zeros((M, 4))
+    for i in range(4):
         C_i[:, i] = -alpha0 * (kappa[i] + E_linear[:, i]) - E0 * alpha_i[i] - alpha_i[i] * (kappa[i] + E_linear[:, i])
 
-    C_ip = np.zeros((M, 6))
-    for i in range(6):
+    C_ip = np.zeros((M, 4))
+    for i in range(4):
         C_ip[:, i] = alpha_i[i] - alpha_p * (kappa[i] + E_linear[:, i])
 
-    C_ij = np.zeros((M, 6, 6))
-    for i in range(6):
-        for j in range(i + 1, 6):
+    C_ij = np.zeros((M, 4, 4))
+    for i in range(4):
+        for j in range(i + 1, 4):
             C_ij[:, i, j] = -alpha0 * E_quad[:, i, j] - alpha_i[i] * (kappa[j] + E_linear[:, j]) - alpha_i[j] * (kappa[i] + E_linear[:, i])
 
     return {
@@ -125,51 +125,67 @@ def get_profit_coefficients_vectorized(df, gp, w, wij, alpha, beta, kappa, fric,
     }
 
 
-def build_qiskit_quadratic_program(coefficients, p_min=500, p_max=6000):
+from qiskit_optimization import QuadraticProgram
+from qiskit_optimization.converters import IntegerToBinary
+
+def build_optimized_qiskit_qp(coefficients, p_base=5000, p_max=60000, K_steps=16):
     """
-    Transforms the linearized profit coefficients into a Qiskit QuadraticProgram.
+    Builds a qubit-optimized QuadraticProgram by discretizing the premium 
+    into K steps, reducing the premium encoding to log2(K) qubits.
     """
-    qp = QuadraticProgram(name="Ransomware_Premium_Optimization")
+    qp = QuadraticProgram()
     
-    # 1. Define Variables
-    control_names = ["x_MFA", "x_EDR", "x_Offline_Backup", "x_Patch_Mgmt", "x_IR_Plan", "x_Net_Seg"]
+    # 1. Calculate the step size
+    delta_p = (p_max - p_base) / (K_steps - 1)
+    
+    # 2. Define Variables
+    control_names = ["x_MFA", "x_EDR", "x_Offline_Backup", "x_Patch_Mgmt"] #, "x_IR_Plan", "x_Net_Seg"]
     for name in control_names:
         qp.binary_var(name=name)
         
-    # The document expresses p as continuous in the quadratic form. 
-    qp.integer_var(name="p", lowerbound=int(p_min), upperbound=int(p_max))    
-    # Extract coefficient matrices
-    C_const = coefficients["C"]
+    # k requires exactly 4 qubits if K_steps=16
+    qp.integer_var(name="k", lowerbound=0, upperbound=K_steps - 1)
+    
+    # 3. Extract original coefficients
+    C = coefficients["C"]
     C_p = coefficients["Cp"]
     C_pp = coefficients["Cpp"]
     C_i = coefficients["Ci"]
     C_ip = coefficients["Cip"]
     C_ij = coefficients["Cij"]
     
-    # 2. Build Linear Objective Terms
-    linear_obj = {"p": C_p}
-    for idx, name in enumerate(control_names):
-        if C_i[idx] != 0:
-            linear_obj[name] = C_i[idx]
-            
-    # 3. Build Quadratic Objective Terms
-    quadratic_obj = {("p", "p"): C_pp}
+    # 4. Compute Substituted Coefficients
+    new_C = C + C_p * p_base + C_pp * (p_base ** 2)
+    new_C_k = C_p * delta_p + 2 * C_pp * p_base * delta_p
+    new_C_kk = C_pp * (delta_p ** 2)
     
-    for i in range(6):
-        # Interaction between control i and premium p
-        if C_ip[i] != 0:
-            quadratic_obj[(control_names[i], "p")] = C_ip[i]
+    new_C_i = [C_i[idx] + C_ip[idx] * p_base for idx in range(4)]
+    new_C_ik = [C_ip[idx] * delta_p for idx in range(4)]
+    
+    # 5. Build Objective Dictionary
+    linear_obj = {"k": new_C_k}
+    for idx, name in enumerate(control_names):
+        if new_C_i[idx] != 0:
+            linear_obj[name] = new_C_i[idx]
             
-        # Interaction between control i and control j
-        for j in range(i + 1, 6):
+    quadratic_obj = {("k", "k"): new_C_kk}
+    
+    for i in range(4):
+        if new_C_ik[i] != 0:
+            quadratic_obj[(control_names[i], "k")] = new_C_ik[i]
+            
+        for j in range(i + 1, 4):
             if C_ij[i, j] != 0:
                 quadratic_obj[(control_names[i], control_names[j])] = C_ij[i, j]
                 
-    # 4. Set Objective
-    # The document evaluates Expected Profit, requiring maximization.
-    qp.maximize(constant=C_const, linear=linear_obj, quadratic=quadratic_obj)
+    # 6. Set Objective and Convert
+    qp.maximize(constant=new_C, linear=linear_obj, quadratic=quadratic_obj)
     
-    return qp
+    # Automatically convert the integer 'k' into 4 binary variables
+    conv = IntegerToBinary()
+    qubo_qp = conv.convert(qp)
+    
+    return qubo_qp
 
 def generate_qps_for_dataset(batched_coeffs, num_companies, p_min=5000, p_max=60000):
     """
@@ -190,7 +206,7 @@ def generate_qps_for_dataset(batched_coeffs, num_companies, p_min=5000, p_max=60
         }
         
         # Build the QP for this specific company
-        qp = build_qiskit_quadratic_program(single_coeffs, p_min, p_max)
+        qp = build_optimized_qiskit_qp(single_coeffs, p_min, p_max, 4)
         
         # Optional: Name the QP uniquely for tracking
         qp.name = f"Ransomware_Premium_Optimization_Company_{k}"

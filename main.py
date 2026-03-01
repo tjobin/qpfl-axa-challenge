@@ -30,9 +30,10 @@ coefficients = get_profit_coefficients_vectorized(
     INTERACTIONS
     )
 
-qps = generate_qps_for_dataset(coefficients, num_companies=1, p_min=P_MIN, p_max=P_MAX)
+qps = generate_qps_for_dataset(coefficients, num_companies=1, p_min=1, p_max=100)
 optimal_solutions = []
 for qp in qps:
+    print(qp.get_num_vars)
     optimal_solution = minimize_binary_loss_warm_start(qp)
     optimal_solutions.append(optimal_solutions)
     
