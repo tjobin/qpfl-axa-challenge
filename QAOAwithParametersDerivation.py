@@ -575,7 +575,7 @@ def build_qp_from_Q(Q):
     return qp
 
 
-company = sample_company(np.random.default_rng())
+company = sample_company(np.random.default_rng(), industry="tech", size_tier="medium")
 
 Q = build_qubo_matrix(company, M=3, normalize=False)
 
