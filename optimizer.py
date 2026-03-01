@@ -4,6 +4,8 @@ from qiskit_optimization.algorithms import WarmStartQAOAOptimizer, SlsqpOptimize
 from qiskit_algorithms import QAOA
 from qiskit_algorithms.optimizers import COBYLA
 from qiskit.primitives import StatevectorSampler
+from qiskit_optimization.converters import IntegerToBinary
+
 
 
 def minimize_binary_loss(qp: QuadraticProgram):
@@ -18,19 +20,25 @@ def minimize_binary_loss(qp: QuadraticProgram):
     """
     # 1. Define a classical optimizer to tune the continuous QAOA parameters
     optimizer = COBYLA(maxiter=100)
-    
+    print('1')
     # 2. Define the quantum execution primitive 
     sampler = StatevectorSampler()
-    
+    print('2')
     # 3. Instantiate the QAOA solver
     # reps defines the circuit depth (p-layers of Cost and Mixer Hamiltonians)
     qaoa = QAOA(sampler=sampler, optimizer=optimizer, reps=2)
+    print('3')
     
     # 4. Wrap QAOA in the MinimumEigenOptimizer to handle the QUBO-to-Hamiltonian mapping
     qaoa_optimizer = MinimumEigenOptimizer(min_eigen_solver=qaoa)
+
+    conv = IntegerToBinary()
     
+    qubo_qp = conv.convert(qp)
+    print(qp.variables)
+    print(qubo_qp.variables)
     # 5. Solve the binary optimization problem
-    result = qaoa_optimizer.solve(qp)
+    result = qaoa_optimizer.solve(qubo_qp)
     
     return result
 
@@ -54,7 +62,7 @@ def minimize_binary_loss_warm_start(qp: QuadraticProgram):
     optimizer = COBYLA(maxiter=100)
     
     # 3. Instantiate the standard QAOA solver
-    qaoa_mes = QAOA(sampler=sampler, optimizer=optimizer, reps=2)
+    qaoa_mes = QAOA(sampler=sampler, optimizer=optimizer, reps=1)
     
     # 4. Wrap QAOA in the WarmStartQAOAOptimizer
     # relax_for_pre_solver=True automatically converts binary variables to continuous 
@@ -92,3 +100,5 @@ if __name__ == "__main__":
     
     print(f"Optimal binary vector x: {optimal_solution.x}")
     print(f"Minimum loss value: {optimal_solution.fval}")
+
+    
