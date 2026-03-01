@@ -506,7 +506,7 @@ def build_qubo_matrix(company, M=6, Delta=None, normalize=False):
     for i in range(n_controls):
         Q[i, i] += Ci[i]
 
-        # 🔥 ADD MISSING TERM: Cip * p_min * x_i
+        # ADD MISSING TERM: Cip * p_min * x_i
         Q[i, i] += Cip[i] * p_min
 
     # --- Control-control quadratic ---
@@ -561,12 +561,12 @@ def compute_profit_from_bitstring(bitstring, company, M=3, Delta=None):
     x_controls = bitstring[:N_CONTROLS]
     x_bits = bitstring[N_CONTROLS:N_CONTROLS+M]
 
-    # Premium reale
+    # Premium reconstruction
     p = P_MIN + Delta * sum(
         x_bits[m] * 2**m for m in range(M)
     )
 
-    # Ricostruisci Q senza normalizzazione
+    # Reconstruct Q without normalization to get the correct energy
     Q = build_qubo_matrix(
         company,
         M=M,
@@ -574,10 +574,10 @@ def compute_profit_from_bitstring(bitstring, company, M=3, Delta=None):
         normalize=False
     )
 
-    # Energia QUBO (senza penalità)
+    # Energy QUBO 
     energy = bitstring @ Q @ bitstring
 
-    # Profitto = -energia
+    # Profit = -energy
     profit = -energy
 
     return {
@@ -606,7 +606,6 @@ def build_qp_from_Q(Q, n_controls, min_active=None):
 
     qp.minimize(linear=linear, quadratic=quadratic)
 
-    # 🔴 VINCOLO: almeno min_active controlli attivi
     if min_active is not None:
         coeffs = {f"x{i}": 1 for i in range(n_controls)}
         qp.linear_constraint(
