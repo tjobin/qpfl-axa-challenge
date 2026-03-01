@@ -8,8 +8,6 @@ import pandas as pd
 from itertools import product as iproduct
 import time
 import os
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Global Parameters
 # ─────────────────────────────────────────────────────────────────────────────
@@ -19,10 +17,10 @@ GLOBAL_PARAMS = {
     "e0": 1.0, "e1": 0.4, "e2": 0.3, "e3": 0.2, "e4": 0.1,
     "Imax": 5,
 
-    # Security posture weights (per-control and pairwise)
+    # Security posture weights (per-control and pairwise) - Truncated to 4
     "z0": -1.0,
-    "w":  np.array([0.4, 0.5, 0.3, 0.4, 0.3, 0.5]),
-    "wij": {(1, 3): 0.10, (0, 5): 0.08},   # EDR+Patch, MFA+NetSeg synergies
+    "w":  np.array([0.4, 0.5, 0.3, 0.4]),
+    "wij": {(1, 3): 0.10},   # EDR+Patch synergy kept; NetSeg removed
 
     # Frequency model
     "lambda0": 0.05, "lambda_C": 0.3, "lambda_R": 0.2,
@@ -30,7 +28,7 @@ GLOBAL_PARAMS = {
     # Severity model
     "c1": 500, "d0": 3, "d1": 0.02, "gamma": 0.02,
 
-    # Policy terms (fixed in this version)
+    # Policy terms
     "deductible": 10_000,
     "limit":      1_000_000,
     "k":          1.0,
@@ -42,28 +40,84 @@ GLOBAL_PARAMS = {
     "eta_u": 0.0000005,
     "eta_d": 0.00002,
 
-    # Penalties (these are "soft constraints" in the analytical objective)
-    "mu_B":   1e-4,   # budget penalty weight
-    "mu_dep": 5.0,    # dependency penalty weight
+    # Penalties 
+    "mu_B":   1e-4,   
+    "mu_dep": 5.0,    
 }
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Control Definitions
 # ─────────────────────────────────────────────────────────────────────────────
-CONTROL_NAMES = ["MFA", "EDR", "Offline_Backup", "Patch_Mgmt", "IR_Plan", "Net_Segmentation"]
-N_CONTROLS = 6
-KAPPA = np.array([2_500, 4_000, 3_000, 2_000, 1_500, 5_000])
-ALPHA = np.array([0.30,  0.25,  0.05,  0.20,  0.10,  0.15])
-BETA  = np.array([0.10,  0.20,  0.40,  0.15,  0.15,  0.20])
-FRIC  = np.array([0.15,  0.20,  0.10,  0.25,  0.10,  0.30])
+CONTROL_NAMES = ["MFA", "EDR", "Offline_Backup", "Patch_Mgmt"]
+N_CONTROLS = 4
+
+# Truncated control attributes
+KAPPA = np.array([2_500, 4_000, 3_000, 2_000])
+ALPHA = np.array([0.30,  0.25,  0.05,  0.20])
+BETA  = np.array([0.10,  0.20,  0.40,  0.15])
+FRIC  = np.array([0.15,  0.20,  0.10,  0.25])
 
 # Pairwise interactions: (alpha_ij, beta_ij)
-INTERACTIONS = {(1, 3): (0.05, 0.03), (0, 5): (0.03, 0.02)}
-DEPENDENCIES = [(4, 2)]   # IR_Plan requires Offline_Backup
+INTERACTIONS = {(1, 3): (0.05, 0.03)} # Dropped (0, 5)
+DEPENDENCIES = []                     # Dropped IR_Plan -> Backup dependency
 
-# Global premium hard bounds (still used for clipping)
 P_MIN, P_MAX = 5_000, 60_000
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Global Parameters
+# # ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL_PARAMS = {
+#     # Proxy coefficients
+#     "a0": 50, "a1": 2,
+#     "e0": 1.0, "e1": 0.4, "e2": 0.3, "e3": 0.2, "e4": 0.1,
+#     "Imax": 5,
+
+#     # Security posture weights (per-control and pairwise)
+#     "z0": -1.0,
+#     "w":  np.array([0.4, 0.5, 0.3, 0.4, 0.3, 0.5]),
+#     "wij": {(1, 3): 0.10, (0, 5): 0.08},   # EDR+Patch, MFA+NetSeg synergies
+
+#     # Frequency model
+#     "lambda0": 0.05, "lambda_C": 0.3, "lambda_R": 0.2,
+
+#     # Severity model
+#     "c1": 500, "d0": 3, "d1": 0.02, "gamma": 0.02,
+
+#     # Policy terms (fixed in this version)
+#     "deductible": 10_000,
+#     "limit":      1_000_000,
+#     "k":          1.0,
+
+#     # Acceptance model
+#     "eta0": 1.5,
+#     "eta_p": 0.00008,
+#     "eta_c": 2.0,
+#     "eta_u": 0.0000005,
+#     "eta_d": 0.00002,
+
+#     # Penalties (these are "soft constraints" in the analytical objective)
+#     "mu_B":   1e-4,   # budget penalty weight
+#     "mu_dep": 5.0,    # dependency penalty weight
+# }
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Control Definitions
+# # ─────────────────────────────────────────────────────────────────────────────
+# CONTROL_NAMES = ["MFA", "EDR", "Offline_Backup", "Patch_Mgmt", "IR_Plan", "Net_Segmentation"]
+# N_CONTROLS = 6
+# KAPPA = np.array([2_500, 4_000, 3_000, 2_000, 1_500, 5_000])
+# ALPHA = np.array([0.30,  0.25,  0.05,  0.20,  0.10,  0.15])
+# BETA  = np.array([0.10,  0.20,  0.40,  0.15,  0.15,  0.20])
+# FRIC  = np.array([0.15,  0.20,  0.10,  0.25,  0.10,  0.30])
+
+# # Pairwise interactions: (alpha_ij, beta_ij)
+# INTERACTIONS = {(1, 3): (0.05, 0.03), (0, 5): (0.03, 0.02)}
+# DEPENDENCIES = [(4, 2)]   # IR_Plan requires Offline_Backup
+
+# # Global premium hard bounds (still used for clipping)
+# P_MIN, P_MAX = 5_000, 60_000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -365,8 +419,8 @@ def build_row(sample_id, company_id, company, x, premium_idx, p_grid,
         "x_EDR":            int(x[1]),
         "x_Offline_Backup": int(x[2]),
         "x_Patch_Mgmt":     int(x[3]),
-        "x_IR_Plan":        int(x[4]),
-        "x_Net_Seg":        int(x[5]),
+        # "x_IR_Plan":        int(x[4]),
+        # "x_Net_Seg":        int(x[5]),
         "n_controls_req":   int(x.sum()),
         "control_cost":     round(C, 2),
         "friction_score":   round(F, 4),
@@ -396,8 +450,8 @@ def build_row(sample_id, company_id, company, x, premium_idx, p_grid,
         "opt_x_EDR":            int(opt_x[1]),
         "opt_x_Offline_Backup": int(opt_x[2]),
         "opt_x_Patch_Mgmt":     int(opt_x[3]),
-        "opt_x_IR_Plan":        int(opt_x[4]),
-        "opt_x_Net_Seg":        int(opt_x[5]),
+        # "opt_x_IR_Plan":        int(opt_x[4]),
+        # "opt_x_Net_Seg":        int(opt_x[5]),
         "opt_premium_idx":      int(opt_k),
         "opt_premium":          round(float(opt_p), 2),
         "opt_n_controls":       int(opt_x.sum()),
